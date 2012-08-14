@@ -1161,7 +1161,7 @@
 
                 // fix for measureText cross-browser inconsistency - use temporary placeholder child-span
                 measureTextSpan = $('<span style="visibility:hidden; padding:0; margin:0; width:auto; font-size:'+ fontDefaults.size+'px;"></span>');
-                $(placeholder).append(measureTextSpan);
+                placeholder.append(measureTextSpan);
 
                 $.each(allocatedAxes, function (_, axis) {
                     // make the ticks
