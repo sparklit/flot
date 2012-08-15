@@ -1031,7 +1031,7 @@
                 all = axis.direction == "x" ? xaxes : yaxes,
                 index;
 
-            // find all axis which have the same position as the current
+            // find all axes which have the same position as the current
             var samePosition = $.grep(all, function (a) {
                 return a && a.options.position == pos && a.reserveSpace;
             });
