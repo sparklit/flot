@@ -242,7 +242,7 @@
         }
 
         function parseOptions(opts) {
-            var i;
+            var i, sides = ["top", "right", "bottom", "left"];
 
             $.extend(true, options, opts);
 
@@ -272,6 +272,20 @@
             if (options.grid.tickEdge == null || typeof options.grid.tickEdge != "object") {
                 var te = !!options.grid.tickEdge;
                 options.grid.tickEdge = {top:te, left:te, right:te, bottom:te};
+            }
+
+            // cleanup for short-hand option def
+            for(i = 0; i < sides.length; i++) {
+                var side = sides[i];
+                if (!options.grid.borderColor[side]) {
+                    options.grid.borderColor[side] = options.grid.color;
+                }
+                if (!options.grid.borderWidth[side]) {
+                    options.grid.borderWidth[side] = 0;
+                }
+                if (!options.grid.tickEdge[side]) {
+                    options.grid.tickEdge[side] = false;
+                }
             }
 
             // fill in defaults in axes, copy at least always the
