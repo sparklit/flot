@@ -793,6 +793,7 @@ grid: {
     borderWidth: number or object with "top", "right", "bottom" and "left" numeric properties
     borderColor: color or null or object with "top", "right", "bottom" and "left" color properties
     minBorderMargin: number or null
+    tickEdge: bool or object with "top", "right", "bottom" and "left" boolean properties
     clickable: boolean
     hoverable: boolean
     autoHighlight: boolean
@@ -841,6 +842,10 @@ and "left" properties to have different colors on each side.
 "minBorderMargin" controls the default minimum  margin around the 
 border - it's used to make sure that points aren't  accidentally clipped by 
 the canvas edge so by default the value is computed from the point radius.
+
+"tickEdge" tells the tick drawing process how you want the surrounding
+edge ticks to show up. Defaults to false. It may be set to a boolean
+or an object with "top", "right", "bottom" and "left" boolean properties.
 
 "markings" is used to draw simple lines and rectangular areas in the
 background of the plot. You can either specify an array of ranges on

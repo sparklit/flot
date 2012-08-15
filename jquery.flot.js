@@ -123,13 +123,14 @@
                     aboveData: false,
                     color: "#545454", // primary color used for outline and labels
                     backgroundColor: null, // null for transparent, else color
-                    borderColor: null, // set if different from the grid color
+                    borderColor: null, // set if different from the grid color (accepts color or object)
                     tickColor: null, // color for the ticks, e.g. "rgba(0,0,0,0.15)"
                     margin: 0, // distance from the canvas edge to the grid
                     labelMargin: 5, // in pixels
                     axisMargin: 8, // in pixels
-                    borderWidth: 2, // in pixels
+                    borderWidth: 2, // in pixels or object like {top:n, right:n, bottom:n, left:n}
                     minBorderMargin: null, // in pixels, null means taken from points radius
+                    tickEdge: false, // bool or object like {top:true, right:true, bottom:true, left:true}
                     markings: null, // array of ranges or fn: axes -> array of ranges
                     markingsColor: "#f4f4f4",
                     markingsLineWidth: 2,
@@ -261,12 +262,17 @@
                 var bc = options.grid.borderColor;
                 options.grid.borderColor = {top:bc, left:bc, right:bc, bottom:bc};
             }
-            if (options.grid.borderWidth && typeof options.grid.borderWidth != "object") {
-                var bw = options.grid.borderWidth;
+            if (options.grid.borderWidth == null || typeof options.grid.borderWidth != "object") {
+                var bw = options.grid.borderWidth ? +options.grid.borderWidth : 0;
                 options.grid.borderWidth = {top:bw, left:bw, right:bw, bottom:bw};
             }
+            
             if (options.grid.tickColor == null)
                 options.grid.tickColor = $.color.parse(options.grid.color).scale('a', 0.22).toString();
+            if (options.grid.tickEdge == null || typeof options.grid.tickEdge != "object") {
+                var te = !!options.grid.tickEdge;
+                options.grid.tickEdge = {top:te, left:te, right:te, bottom:te};
+            }
 
             // fill in defaults in axes, copy at least always the
             // first as the rest of the code assumes it'll be there
@@ -1011,16 +1017,19 @@
                 all = axis.direction == "x" ? xaxes : yaxes,
                 index;
 
-            // determine axis margin
+            // find all axis which have the same position as the current
             var samePosition = $.grep(all, function (a) {
                 return a && a.options.position == pos && a.reserveSpace;
             });
+            // determine axis margin
             if ($.inArray(axis, samePosition) == samePosition.length - 1)
                 axisMargin = 0; // outermost
 
             // determine tick length - if we're innermost, we can use "full"
             if (tickLength == null) {
-                var sameDirection = $.grep(all, function (a) {
+                // of the axes with the same position, 
+                //      find out which ones are on the same side
+                var sameDirection = $.grep(samePosition, function (a) {
                     return a && a.reserveSpace;
                 });
 
@@ -1129,13 +1138,6 @@
 
             executeHooks(hooks.processOffset, [plotOffset]);
 
-            // If the grid is visible, add its border width to the offset
-
-            if (bw) {
-                for (var a in plotOffset)
-                    plotOffset[a] += showGrid ? bw[a] : 0;
-            }
-
             // init axes
             $.each(axes, function (_, axis) {
                 axis.show = axis.options.show;
@@ -1148,6 +1150,10 @@
             });
 
             if (showGrid) {
+                // If the grid is visible, add its border width to the offset
+                for (var a in plotOffset)
+                    plotOffset[a] += bw[a];
+                
                 // determine from the placeholder the font size ~ height of font ~ 1 em
                 var fontDefaults = {
                     style: placeholder.css("font-style"),
@@ -1548,11 +1554,19 @@
             }
 
             // draw the ticks
-            var axes = allAxes(), bw = options.grid.borderWidth;
+            var axes = allAxes(), 
+                bw = options.grid.borderWidth,
+                bc = options.grid.borderColor,
+                tickEdge = options.grid.tickEdge,
+                lineWidthOffset = ctx.lineWidth / 2, // causes grid lines to be sharper (thinner)
+                // only allow grid ticks to be drawn once despite n axes in any direction
+                // when multiple axes in an orientiation, we can get 2x axes which are considered innermost
+                horizontalTicksDrawn = false,
+                verticalTicksDrawn = false;
 
             for (var j = 0; j < axes.length; ++j) {
                 var axis = axes[j], box = axis.box,
-                    t = axis.tickLength, x, y, xoff, yoff;
+                    tickLength = axis.tickLength, x, y, xoff, yoff;
                 if (!axis.show || axis.ticks.length == 0)
                     continue;
 
@@ -1562,14 +1576,14 @@
                 // find the edges
                 if (axis.direction == "x") {
                     x = 0;
-                    if (t == "full")
+                    if (axis.innermost)
                         y = (axis.position == "top" ? 0 : plotHeight);
                     else
                         y = box.top - plotOffset.top + (axis.position == "top" ? box.height : 0);
                 }
                 else {
                     y = 0;
-                    if (t == "full")
+                    if (axis.innermost)
                         x = (axis.position == "left" ? 0 : plotWidth);
                     else
                         x = box.left - plotOffset.left + (axis.position == "left" ? box.width : 0);
@@ -1597,85 +1611,129 @@
                 // draw ticks
                 ctx.beginPath();
                 for (i = 0; i < axis.ticks.length; ++i) {
-                    var v = axis.ticks[i].v;
+                    var v = axis.ticks[i].v,
+                        roundX = 0, roundY = 0;
 
                     xoff = yoff = 0;
 
-                    if (v < axis.min || v > axis.max
-                        // skip those lying on the axes if we got a border
-                        || (t == "full"
-                        && (bw[axis.position] > 0)
-                        && (v == axis.min || v == axis.max)))
-                        continue;
-
+                    // init x pos
                     if (axis.direction == "x") {
                         x = axis.p2c(v);
-                        yoff = t == "full" ? -plotHeight : t;
-
+                        roundX = Math.round(x);
+                        if (roundX > plotWidth) {
+                            x = plotWidth;
+                        }
+                    }
+                    // init y pos
+                    else {
+                        y = axis.p2c(v);
+                        roundY = Math.round(y);
+                        if (roundY > plotHeight) {
+                            y = plotHeight;
+                        }
+                    }
+                    
+                    // make sure we can actually draw the tick
+                    if (axis.innermost && (
+                            axis.direction == "x" && (roundX <= 0 || roundX >= plotWidth)
+                            ||
+                            axis.direction == "y" && (roundY <= 0 || roundY >= plotHeight)
+                        )) {
+                        continue;
+                    }
+                    
+                    // init xoff
+                    if (axis.direction == "x") {
+                        yoff = axis.innermost && !verticalTicksDrawn ? -plotHeight : tickLength;
                         if (axis.position == "top")
                             yoff = -yoff;
                     }
+                    // init yoff
                     else {
-                        y = axis.p2c(v);
-                        xoff = t == "full" ? -plotWidth : t;
-
+                        xoff = axis.innermost && !horizontalTicksDrawn ? -plotWidth : tickLength;
                         if (axis.position == "left")
                             xoff = -xoff;
                     }
 
                     if (ctx.lineWidth == 1) {
                         if (axis.direction == "x")
-                            x = Math.floor(x) + 0.5;
+                            x = Math.floor(x) + lineWidthOffset;
                         else
-                            y = Math.floor(y) + 0.5;
+                            y = Math.floor(y) + lineWidthOffset;
                     }
-
+                    
                     ctx.moveTo(x, y);
                     ctx.lineTo(x + xoff, y + yoff);
+                }
+                
+                // if we drew the vertical ticks, apply the tick edges too
+                if (axis.direction == "x" && !verticalTicksDrawn) {
+                    verticalTicksDrawn = true;
+
+                    // display the appropriate tick grid edges (if no border on that particular side)
+                    if (tickEdge.right && !bw.right) {
+                        ctx.moveTo(plotWidth - lineWidthOffset, 0);
+                        ctx.lineTo(plotWidth - lineWidthOffset, plotHeight);
+                    }
+                    if (tickEdge.left && !bw.left) {
+                        ctx.moveTo(0 + lineWidthOffset, 0);
+                        ctx.lineTo(0 + lineWidthOffset, plotHeight);
+                    }
+                }
+                
+                // if we drew the horizontal ticks, apply the tick edges too
+                if (axis.direction == "y" && !horizontalTicksDrawn) {
+                    horizontalTicksDrawn = true;
+
+                    // display the appropriate tick grid edges (if no border on that particular side)
+                    if (tickEdge.top && !bw.top) {
+                        ctx.moveTo(0 + lineWidthOffset, 0 + lineWidthOffset);
+                        ctx.lineTo(plotWidth - lineWidthOffset, 0 + lineWidthOffset);
+                    }
+                    if (tickEdge.bottom && !bw.bottom) {
+                        ctx.moveTo(0 + lineWidthOffset, plotHeight - lineWidthOffset);
+                        ctx.lineTo(plotWidth - lineWidthOffset, plotHeight - lineWidthOffset);
+                    }
                 }
 
                 ctx.stroke();
             }
-
-            // draw border
-            if (bw) {
-                bc = options.grid.borderColor;
-                // drop TOP border between the INNER edges
-                if (bw.top > 0) {
-                    ctx.beginPath();
-                    ctx.strokeStyle = bc.top;
-                    ctx.lineWidth = bw.top;
-                    ctx.moveTo(0, 0 - bw.top/2);
-                    ctx.lineTo(plotWidth, 0 - bw.top/2);
-                    ctx.stroke();
-                }
-                // draw the RIGHT border between the OUTER edges
-                if (bw.right > 0) {
-                    ctx.beginPath();
-                    ctx.strokeStyle = bc.right;
-                    ctx.lineWidth = bw.right;
-                    ctx.moveTo(plotWidth + bw.right / 2, 0 - bw.top);
-                    ctx.lineTo(plotWidth + bw.right / 2, plotHeight + bw.bottom );
-                    ctx.stroke();
-                }
-                // draw the BOTTOM border between the INNER edges
-                if (bw.bottom > 0) {
-                    ctx.beginPath();
-                    ctx.strokeStyle = bc.bottom;
-                    ctx.lineWidth = bw.bottom;
-                    ctx.moveTo(plotWidth, plotHeight + bw.bottom / 2);
-                    ctx.lineTo(0, plotHeight + bw.bottom / 2);
-                    ctx.stroke();
-                }
-                // draw the LEFT border between the OUTER edges
-                if (bw.left > 0) {
-                    ctx.beginPath();
-                    ctx.strokeStyle = bc.left;
-                    ctx.lineWidth = bw.left;
-                    ctx.moveTo(0 - bw.left/2, plotHeight + bw.bottom);
-                    ctx.lineTo(0 - bw.left/2, 0 - bw.top);
-                    ctx.stroke();
-                }
+            
+            // drop TOP border between the INNER edges
+            if (bw.top) {
+                ctx.beginPath();
+                ctx.strokeStyle = bc.top;
+                ctx.lineWidth = bw.top;
+                ctx.moveTo(0, 0 - bw.top/2);
+                ctx.lineTo(plotWidth, 0 - bw.top/2);
+                ctx.stroke();
+            }
+            // draw the RIGHT border between the OUTER edges
+            if (bw.right) {
+                ctx.beginPath();
+                ctx.strokeStyle = bc.right;
+                ctx.lineWidth = bw.right;
+                ctx.moveTo(plotWidth + bw.right/2, 0 - bw.top);
+                ctx.lineTo(plotWidth + bw.right/2, plotHeight + bw.bottom);
+                ctx.stroke();
+            }
+            // draw the BOTTOM border between the INNER edges
+            if (bw.bottom) {
+                ctx.beginPath();
+                ctx.strokeStyle = bc.bottom;
+                ctx.lineWidth = bw.bottom;
+                ctx.moveTo(plotWidth, plotHeight + bw.bottom/2);
+                ctx.lineTo(0, plotHeight + bw.bottom/2);
+                ctx.stroke();
+            }
+            // draw the LEFT border between the OUTER edges
+            if (bw.left) {
+                ctx.beginPath();
+                ctx.strokeStyle = bc.left;
+                ctx.lineWidth = bw.left;
+                ctx.moveTo(0 - bw.left/2, plotHeight + bw.bottom);
+                ctx.lineTo(0 - bw.left/2, 0 - bw.top);
+                ctx.stroke();
             }
 
             ctx.restore();
@@ -1707,7 +1765,7 @@
                     var tick = axis.ticks[i];
                     if (!tick.label || tick.v < axis.min || tick.v > axis.max)
                         continue;
-
+                    
                     var x, y, offset = 0, line;
                     for (var k = 0; k < tick.lines.length; ++k) {
                         line = tick.lines[k];
