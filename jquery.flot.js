@@ -1762,6 +1762,9 @@
                     return;
 
                 var box = axis.box, f = axis.font,
+                    // to display a tick label, we need to test that the value is within a threshold around the position it should be in
+                    // the exact >min <max checks that it was doing are too accurate since a tick itself doesn't know
+                    // if it is the first or last to be shown
                     tickDisplayOffset = axis.delta / 2;
                 // placeholder.append('<div style="position:absolute;opacity:0.10;background-color:red;left:' + box.left + 'px;top:' + box.top + 'px;width:' + box.width +  'px;height:' + box.height + 'px"></div>') // debug
 
