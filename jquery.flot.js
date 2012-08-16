@@ -1637,6 +1637,7 @@
                         if (roundX > plotWidth) {
                             x = plotWidth;
                         }
+                        console.log([v, x, roundX, roundX <= 0]);
                     }
                     // init y pos
                     else {
@@ -1760,7 +1761,8 @@
                 if (!axis.show || axis.ticks.length == 0)
                     return;
 
-                var box = axis.box, f = axis.font;
+                var box = axis.box, f = axis.font,
+                    tickDisplayOffset = axis.delta / 2;
                 // placeholder.append('<div style="position:absolute;opacity:0.10;background-color:red;left:' + box.left + 'px;top:' + box.top + 'px;width:' + box.width +  'px;height:' + box.height + 'px"></div>') // debug
 
                 ctx.fillStyle = axis.options.color;
@@ -1777,7 +1779,7 @@
 
                 for (var i = 0; i < axis.ticks.length; ++i) {
                     var tick = axis.ticks[i];
-                    if (!tick.label || tick.v < axis.min || tick.v > axis.max)
+                    if (!tick.label || tick.v < (axis.min - tickDisplayOffset) || tick.v > (axis.max + tickDisplayOffset))
                         continue;
                     
                     var x, y, offset = 0, line;
