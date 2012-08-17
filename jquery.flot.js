@@ -565,6 +565,14 @@
 
                 var data = s.data, format = s.datapoints.format;
 
+                // each point format is, by default, 3 consecutive objects
+                // ex. [x, y, default]
+                // Therefore, a 3 point series results in a 9 point formatted series.
+                // ex. in the series [5, 10, 15], each point is represented like so:
+                //      5: [0, 5, 0], 10: [1, 10, 0], 15: [2, 15, 0]
+                // and stored in combined list like so:
+                //      [0, 5, 0, 1, 10, 0, 2, 15, 0]
+                
                 if (!format) {
                     format = [];
                     // find out how to copy
@@ -666,7 +674,7 @@
             for (i = 0; i < series.length; ++i) {
                 s = series[i];
 
-                executeHooks(hooks.processDatapoints, [ s, s.datapoints]);
+                executeHooks(hooks.processDatapoints, [ s, s.datapoints ]);
             }
 
             // second pass: find datamax/datamin for auto-scaling
@@ -1754,6 +1762,7 @@
         }
 
         function drawAxisLabels() {
+            var series = options.series;
             ctx.save();
 
             $.each(allAxes(), function (_, axis) {
@@ -1764,7 +1773,12 @@
                     // to display a tick label, we need to test that the value is within a threshold around the position it should be in
                     // the exact >min <max checks that it was doing are too accurate since a tick itself doesn't know
                     // if it is the first or last to be shown
-                    tickDisplayOffset = axis.delta / 2;
+                    tickDisplayOffset = axis.delta / 2,
+                    // with bar graphs, need to account for the barWidth when determining the x offset
+                    // could add other conditions in for this later
+                    barLabelOffset = series.bars && series.bars.show
+                        ? (axis.scale * series.bars.barWidth) / 2
+                        : 0;
                 // placeholder.append('<div style="position:absolute;opacity:0.10;background-color:red;left:' + box.left + 'px;top:' + box.top + 'px;width:' + box.width +  'px;height:' + box.height + 'px"></div>') // debug
 
                 ctx.fillStyle = axis.options.color;
@@ -1778,18 +1792,25 @@
                 // middle align to minimize variation between browsers
                 // and compensate when calculating the coordinates
                 ctx.textBaseline = "middle";
+                
+                
+                
 
                 for (var i = 0; i < axis.ticks.length; ++i) {
                     var tick = axis.ticks[i];
                     if (!tick.label || tick.v < (axis.min - tickDisplayOffset) || tick.v > (axis.max + tickDisplayOffset))
                         continue;
                     
+                    // this will draw each line in an individual tick
                     var x, y, offset = 0, line;
                     for (var k = 0; k < tick.lines.length; ++k) {
                         line = tick.lines[k];
 
                         if (axis.direction == "x") {
                             x = plotOffset.left + axis.p2c(tick.v) - line.width/2;
+                            if (barLabelOffset > 0)
+                                x += barLabelOffset;
+                            
                             if (axis.position == "bottom")
                                 y = box.top + box.padding;
                             else
@@ -1797,11 +1818,19 @@
                         }
                         else {
                             y = plotOffset.top + axis.p2c(tick.v) - tick.height/2;
+                            
                             if (axis.position == "left")
                                 x = box.left + box.width - box.padding - line.width;
                             else
                                 x = box.left + box.padding;
                         }
+                        
+                        // verify whether or not the tick would be drawn off of the plot
+                        // CONSIDER: double checking that this verification is correct in all cases
+                        // maybe better to double check x+width or something
+                        if (axis.direction == "x" && x > plotWidth
+                            || axis.direction == "y" && y > plotHeight)
+                            continue;
 
                         // account for middle aligning and line number
                         y += line.height/2 + offset;
