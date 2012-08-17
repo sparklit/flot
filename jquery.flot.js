@@ -1637,7 +1637,6 @@
                         if (roundX > plotWidth) {
                             x = plotWidth;
                         }
-                        console.log([v, x, roundX, roundX <= 0]);
                     }
                     // init y pos
                     else {
