@@ -1772,8 +1772,9 @@
                 var box = axis.box, f = axis.font,
                     // to display a tick label, we need to test that the value is within a threshold around the position it should be in
                     // the exact >min <max checks that it was doing are too accurate since a tick itself doesn't know
-                    // if it is the first or last to be shown
-                    tickDisplayOffset = axis.delta / 2,
+                    // if it is the first or last to be shown 
+                    // TODO: remove this and implement first/last detection when generating ticks/points etc
+                    tickValueAllowedVariance = axis.delta * 0.05, // 5% of delta for a window
                     // with bar graphs, need to account for the barWidth when determining the x offset
                     // could add other conditions in for this later
                     barLabelOffset = series.bars && series.bars.show
@@ -1798,7 +1799,7 @@
 
                 for (var i = 0; i < axis.ticks.length; ++i) {
                     var tick = axis.ticks[i];
-                    if (!tick.label || tick.v < (axis.min - tickDisplayOffset) || tick.v > (axis.max + tickDisplayOffset))
+                    if (!tick.label || tick.v < (axis.min - tickValueAllowedVariance) || tick.v > (axis.max + tickValueAllowedVariance))
                         continue;
                     
                     // this will draw each line in an individual tick
@@ -1825,12 +1826,12 @@
                                 x = box.left + box.padding;
                         }
                         
+                        
                         // verify whether or not the tick would be drawn off of the plot
-                        // CONSIDER: double checking that this verification is correct in all cases
-                        // maybe better to double check x+width or something
-                        if (axis.direction == "x" && x > plotWidth
-                            || axis.direction == "y" && y > plotHeight)
+                        // NOTE plotWidth check must include plotOffset as well!
+                        if (axis.direction == "x" && (x > plotWidth+plotOffset.left)){
                             continue;
+                        }
 
                         // account for middle aligning and line number
                         y += line.height/2 + offset;
@@ -2175,6 +2176,7 @@
         function drawBar(x, y, b, barLeft, barRight, offset, fillStyleCallback, axisx, axisy, c, horizontal, lineWidth) {
             var left, right, bottom, top,
                 drawLeft, drawRight, drawTop, drawBottom,
+                topLineWidthOffset, rightLineWidthOffset, bottomLineWidthOffset, leftLineWidthOffset, 
                 tmp;
 
             // in horizontal mode, we start the bar from the left
@@ -2196,6 +2198,11 @@
                     drawLeft = true;
                     drawRight = false;
                 }
+
+                topLineWidthOffset = -lineWidth / 2;
+                rightLineWidthOffset = 0;
+                bottomLineWidthOffset = lineWidth / 2;
+                leftLineWidthOffset = 0;
             }
             else {
                 drawLeft = drawRight = drawTop = true;
@@ -2213,6 +2220,11 @@
                     drawBottom = true;
                     drawTop = false;
                 }
+
+                topLineWidthOffset = 0;
+                rightLineWidthOffset = -lineWidth / 2;
+                bottomLineWidthOffset = 0;
+                leftLineWidthOffset = lineWidth / 2;
             }
 
             // clip
@@ -2240,10 +2252,10 @@
                 drawTop = false;
             }
 
-            left = axisx.p2c(left);
-            bottom = axisy.p2c(bottom);
-            right = axisx.p2c(right);
-            top = axisy.p2c(top);
+            left = axisx.p2c(left) + leftLineWidthOffset;
+            bottom = axisy.p2c(bottom) + bottomLineWidthOffset;
+            right = axisx.p2c(right) + rightLineWidthOffset;
+            top = axisy.p2c(top) + topLineWidthOffset;
 
             // fill the bar
             if (fillStyleCallback) {
