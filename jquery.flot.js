@@ -1762,24 +1762,13 @@
         }
 
         function drawAxisLabels() {
-            var series = options.series;
             ctx.save();
 
             $.each(allAxes(), function (_, axis) {
                 if (!axis.show || axis.ticks.length == 0)
                     return;
 
-                var box = axis.box, f = axis.font,
-                    // to display a tick label, we need to test that the value is within a threshold around the position it should be in
-                    // the exact >min <max checks that it was doing are too accurate since a tick itself doesn't know
-                    // if it is the first or last to be shown 
-                    // TODO: remove this and implement first/last detection when generating ticks/points etc
-                    tickValueAllowedVariance = axis.delta * 0.05, // 5% of delta for a window
-                    // with bar graphs, need to account for the barWidth when determining the x offset
-                    // could add other conditions in for this later
-                    barLabelOffset = series.bars && series.bars.show
-                        ? (axis.scale * series.bars.barWidth) / 2
-                        : 0;
+                var box = axis.box, f = axis.font;
                 // placeholder.append('<div style="position:absolute;opacity:0.10;background-color:red;left:' + box.left + 'px;top:' + box.top + 'px;width:' + box.width +  'px;height:' + box.height + 'px"></div>') // debug
 
                 ctx.fillStyle = axis.options.color;
@@ -1793,25 +1782,18 @@
                 // middle align to minimize variation between browsers
                 // and compensate when calculating the coordinates
                 ctx.textBaseline = "middle";
-                
-                
-                
 
                 for (var i = 0; i < axis.ticks.length; ++i) {
                     var tick = axis.ticks[i];
-                    if (!tick.label || tick.v < (axis.min - tickValueAllowedVariance) || tick.v > (axis.max + tickValueAllowedVariance))
+                    if (!tick.label || tick.v < axis.min || tick.v > axis.max)
                         continue;
-                    
-                    // this will draw each line in an individual tick
+
                     var x, y, offset = 0, line;
                     for (var k = 0; k < tick.lines.length; ++k) {
                         line = tick.lines[k];
 
                         if (axis.direction == "x") {
                             x = plotOffset.left + axis.p2c(tick.v) - line.width/2;
-                            if (barLabelOffset > 0)
-                                x += barLabelOffset;
-                            
                             if (axis.position == "bottom")
                                 y = box.top + box.padding;
                             else
@@ -1819,18 +1801,10 @@
                         }
                         else {
                             y = plotOffset.top + axis.p2c(tick.v) - tick.height/2;
-                            
                             if (axis.position == "left")
                                 x = box.left + box.width - box.padding - line.width;
                             else
                                 x = box.left + box.padding;
-                        }
-                        
-                        
-                        // verify whether or not the tick would be drawn off of the plot
-                        // NOTE plotWidth check must include plotOffset as well!
-                        if (axis.direction == "x" && (x > plotWidth+plotOffset.left)){
-                            continue;
                         }
 
                         // account for middle aligning and line number
