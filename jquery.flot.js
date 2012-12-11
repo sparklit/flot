@@ -2195,7 +2195,7 @@
                     drawTop = false;
                 }
 
-                topLineWidthOffset = 0;
+                topLineWidthOffset = lineWidth / 2;
                 rightLineWidthOffset = -lineWidth / 2;
                 bottomLineWidthOffset = 0;
                 leftLineWidthOffset = lineWidth / 2;
